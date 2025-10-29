@@ -526,12 +526,28 @@ const SettingsPage = () => {
                 </div>
                 
                 <div className="cyber-grid-line pt-4">
-                  <h3 className="font-medium mb-2">所需权限</h3>
-                  <ul className="text-cyber-muted text-sm list-disc pl-5 space-y-1">
-                    <li>/dedicated/server/*</li>
-                    <li>/order/*</li>
-                    <li>/me/*</li>
-                  </ul>
+                  <h3 className="font-medium mb-2">所需权限 (Rights)</h3>
+                  <p className="text-xs text-cyan-400 mb-3">
+                    💡 在 OVH 创建 Token 时，请为每个 HTTP 方法添加 <code className="bg-cyan-500/20 px-1 py-0.5 rounded">/*</code> 完全放开权限：
+                  </p>
+                  <div className="text-cyber-muted text-sm space-y-2 bg-cyber-dark/50 p-3 rounded border border-cyber-accent/20">
+                    <div className="grid grid-cols-[80px_1fr] gap-3 items-center">
+                      <div className="font-mono text-cyber-accent font-semibold">GET</div>
+                      <div className="font-mono">/*</div>
+                    </div>
+                    <div className="grid grid-cols-[80px_1fr] gap-3 items-center">
+                      <div className="font-mono text-cyber-accent font-semibold">POST</div>
+                      <div className="font-mono">/*</div>
+                    </div>
+                    <div className="grid grid-cols-[80px_1fr] gap-3 items-center">
+                      <div className="font-mono text-cyber-accent font-semibold">PUT</div>
+                      <div className="font-mono">/*</div>
+                    </div>
+                    <div className="grid grid-cols-[80px_1fr] gap-3 items-center">
+                      <div className="font-mono text-cyber-accent font-semibold">DELETE</div>
+                      <div className="font-mono">/*</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
