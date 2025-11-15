@@ -645,7 +645,7 @@ const QueuePage = () => {
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="bg-cyber-dark border border-cyber-border rounded-lg p-6 max-w-md w-full shadow-xl pointer-events-auto"
+                  className="cyber-card p-6 max-w-md w-full pointer-events-auto"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <h3 className="text-xl font-bold text-cyber-text mb-2">⚠️ 确认清空</h3>
@@ -662,7 +662,7 @@ const QueuePage = () => {
                     </button>
                     <button
                       onClick={clearAllQueue}
-                      className="cyber-button px-4 py-2 bg-red-900/30 border-red-700/40 text-red-300 hover:bg-red-800/40 hover:border-red-600/50 hover:text-red-200"
+                      className="cyber-button px-4 py-2 bg-cyber-accent/20 border-cyber-accent/40 text-cyber-accent hover:bg-cyber-accent/30 hover:border-cyber-accent/60 hover:text-cyber-accent"
                     >
                       确认清空
                     </button>
