@@ -80,53 +80,9 @@ const MonitorPage = () => {
       const response = await api.get('/monitor/subscriptions');
       const newData = response.data as Subscription[];
 
-      // 比对状态变化：从无货->有货 时，如启用自动下单则触发快速下单
-      const prev = prevSubscriptionsRef.current || [];
-      const prevMap = new Map(prev.map(s => [s.planCode, s]));
-      for (const sub of newData) {
-        const prevSub = prevMap.get(sub.planCode);
-        if (sub?.notifyAvailable && sub?.autoOrder && sub?.lastStatus) {
-          const keys = Object.keys(sub.lastStatus);
-          for (const key of keys) {
-            // 兼容两种格式：'dc' 或 'dc|config_key'
-            const dc = key.includes('|') ? key.split('|')[0] : key;
-            const currentStatus = (sub.lastStatus as any)[key];
-            const prevStatus = prevSub?.lastStatus ? (prevSub.lastStatus as any)[key] : undefined;
-            const isCurrentlyAvailable = currentStatus && currentStatus !== 'unavailable';
-            const wasUnavailable = prevStatus === 'unavailable';
-            const noPrevRecord = prevSub === undefined || prevStatus === undefined;
-
-            const becameAvailable = wasUnavailable && isCurrentlyAvailable;
-            const firstTimeAvailable = noPrevRecord && isCurrentlyAvailable;
-
-            if (becameAvailable || firstTimeAvailable) {
-              api.post('/config-sniper/quick-order', {
-                planCode: sub.planCode,
-                datacenter: dc
-              })
-              .then((res) => {
-                const ok = (res?.data as any)?.success !== false;
-                if (ok) {
-                  toast.success(`已自动下单：${sub.planCode}（${dc.toUpperCase()}）已加入队列`);
-                } else {
-                  // 非成功但无异常时，统一静默，避免干扰
-                }
-              })
-              .catch((err: any) => {
-                // 对于“指定机房无可定价配置（...）”的 400 错误，静默处理，不弹错误
-                const status = err?.response?.status;
-                const msg = (err?.response?.data as any)?.error || err?.message || '';
-                const isNoPriceForDc = status === 400 && typeof msg === 'string' && msg.includes('指定机房无可定价配置');
-                if (isNoPriceForDc) {
-                  return;
-                }
-                // 其他错误再提示
-                toast.error(`自动下单失败：${sub.planCode}（${dc.toUpperCase()}）`);
-              });
-            }
-          }
-        }
-      }
+      // ✅ 统一自动下单逻辑：仅后端监控负责自动下单，前端只负责状态显示
+      // 后端监控器在检测到状态变化时会自动触发下单（如果订阅启用了autoOrder）
+      // 前端移除自动下单逻辑，避免与后端重复下单
 
       setSubscriptions(newData);
       prevSubscriptionsRef.current = newData;

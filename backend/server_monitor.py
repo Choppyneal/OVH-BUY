@@ -495,9 +495,9 @@ class ServerMonitor:
             else:
                 # 首次检查有货时发送通知
                 self.add_log("INFO", f"首次检查: {plan_code}@{dc}{config_desc} 有货（状态: {status}），发送通知", "monitor")
-            if subscription.get("notifyAvailable", True):
-                status_changed = True
-                change_type = "available"
+                if subscription.get("notifyAvailable", True):
+                    status_changed = True
+                    change_type = "available"
         # 从无货变有货
         elif old_status == "unavailable" and status != "unavailable":
             if subscription.get("notifyAvailable", True):
@@ -1013,19 +1013,55 @@ class ServerMonitor:
         except Exception as e:
             self.add_log("ERROR", f"发送新服务器提醒失败: {str(e)}", "monitor")
     
+    def _cleanup_expired_caches(self):
+        """清理过期的缓存项（UUID和options缓存）"""
+        current_time = time.time()
+        expired_uuids = []
+        expired_options_keys = []
+        
+        # 清理过期的UUID缓存
+        for uuid_key, cache_data in self.message_uuid_cache.items():
+            cache_timestamp = cache_data.get("timestamp", 0)
+            if current_time - cache_timestamp >= self.message_uuid_cache_ttl:
+                expired_uuids.append(uuid_key)
+        
+        for uuid_key in expired_uuids:
+            del self.message_uuid_cache[uuid_key]
+        
+        # 清理过期的options缓存
+        for options_key, cache_data in self.options_cache.items():
+            cache_timestamp = cache_data.get("timestamp", 0)
+            if current_time - cache_timestamp >= self.options_cache_ttl:
+                expired_options_keys.append(options_key)
+        
+        for options_key in expired_options_keys:
+            del self.options_cache[options_key]
+        
+        if expired_uuids or expired_options_keys:
+            self.add_log("DEBUG", f"清理过期缓存: UUID={len(expired_uuids)}个, Options={len(expired_options_keys)}个", "monitor")
+    
     def monitor_loop(self):
         """监控主循环"""
         self.add_log("INFO", "监控循环已启动", "monitor")
         
         while self.running:
             try:
+                # 定期清理过期缓存（每次循环清理一次）
+                self._cleanup_expired_caches()
+                
                 # 检查订阅的服务器
                 if self.subscriptions:
                     self.add_log("INFO", f"开始检查 {len(self.subscriptions)} 个订阅...", "monitor")
                     
-                    for subscription in self.subscriptions:
+                    # ✅ 创建副本避免在遍历时修改列表导致的竞态条件
+                    subscriptions_copy = list(self.subscriptions)
+                    for subscription in subscriptions_copy:
                         if not self.running:  # 检查是否被停止
                             break
+                        # 再次检查订阅是否仍在列表中（可能在遍历期间被删除）
+                        if subscription not in self.subscriptions:
+                            self.add_log("DEBUG", f"订阅 {subscription.get('planCode')} 在检查期间被删除，跳过", "monitor")
+                            continue
                         self.check_availability_change(subscription)
                         time.sleep(1)  # 避免请求过快
                 else:

@@ -195,32 +195,37 @@ def load_data():
         except json.JSONDecodeError:
             print(f"警告: {SERVERS_FILE}文件格式不正确，使用空列表")
     
-    # 加载订阅数据
+    # 加载订阅数据（需要monitor已初始化）
     if os.path.exists(SUBSCRIPTIONS_FILE):
         try:
             with open(SUBSCRIPTIONS_FILE, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
                 if content:
                     subscriptions_data = json.loads(content)
-                    # 恢复订阅到监控器
-                    if 'subscriptions' in subscriptions_data:
-                        for sub in subscriptions_data['subscriptions']:
-                            monitor.add_subscription(
-                                sub['planCode'],
-                                sub.get('datacenters', []),
-                                sub.get('notifyAvailable', True),
-                                sub.get('notifyUnavailable', False),
-                                sub.get('serverName'),  # 恢复服务器名称
-                                sub.get('lastStatus', {}),  # ✅ 恢复上次状态，避免重复通知
-                                sub.get('history', [])  # ✅ 恢复历史记录
-                            )
-                    # 恢复已知服务器列表
-                    if 'known_servers' in subscriptions_data:
-                        monitor.known_servers = set(subscriptions_data['known_servers'])
-                    # 检查间隔全局强制为5秒（忽略配置文件中的值）
-                    monitor.check_interval = 5
-                    print(f"检查间隔已强制设置为: 5秒（全局固定值）")
-                    print(f"已加载 {len(monitor.subscriptions)} 个订阅")
+                    # 确保monitor已初始化
+                    if monitor is None:
+                        print(f"警告: monitor未初始化，跳过订阅数据加载")
+                    else:
+                        # 恢复订阅到监控器
+                        if 'subscriptions' in subscriptions_data:
+                            for sub in subscriptions_data['subscriptions']:
+                                monitor.add_subscription(
+                                    sub['planCode'],
+                                    sub.get('datacenters', []),
+                                    sub.get('notifyAvailable', True),
+                                    sub.get('notifyUnavailable', False),
+                                    sub.get('serverName'),  # 恢复服务器名称
+                                    sub.get('lastStatus', {}),  # ✅ 恢复上次状态，避免重复通知
+                                    sub.get('history', []),  # ✅ 恢复历史记录
+                                    sub.get('autoOrder', False)  # ✅ 恢复自动下单标记
+                                )
+                        # 恢复已知服务器列表
+                        if 'known_servers' in subscriptions_data:
+                            monitor.known_servers = set(subscriptions_data['known_servers'])
+                        # 检查间隔全局强制为5秒（忽略配置文件中的值）
+                        monitor.check_interval = 5
+                        print(f"检查间隔已强制设置为: 5秒（全局固定值）")
+                        print(f"已加载 {len(monitor.subscriptions)} 个订阅")
                 else:
                     print(f"警告: {SUBSCRIPTIONS_FILE}文件为空")
         except json.JSONDecodeError:
@@ -1056,8 +1061,19 @@ def process_queue():
     while True:
         # 在循环开始时检查队列是否为空
         if not queue:
+            # 队列为空时，清理已完成的删除标记（避免内存泄漏）
+            if deleted_task_ids:
+                deleted_task_ids.clear()
+                add_log("DEBUG", "队列为空，清理删除标记集合", "queue")
             time.sleep(1)
             continue
+        
+        # ✅ 清理已从队列移除的删除标记（避免内存泄漏）
+        current_queue_ids = {item["id"] for item in queue}
+        removed_ids = deleted_task_ids - current_queue_ids
+        if removed_ids:
+            deleted_task_ids -= removed_ids
+            add_log("DEBUG", f"清理 {len(removed_ids)} 个已从队列移除的删除标记", "queue")
             
         # 复制一份并按优先级排序：quickOrder 优先，其次按创建时间
         items_to_process = sorted(
@@ -2229,7 +2245,12 @@ def init_monitor():
 # 保存订阅数据
 def save_subscriptions():
     """保存订阅数据到文件"""
+    global monitor
     try:
+        # 确保monitor已初始化
+        if monitor is None:
+            add_log("WARNING", "monitor未初始化，无法保存订阅数据", "monitor")
+            return
         # 检查间隔全局强制为5秒，保存时也固定为5秒
         monitor.check_interval = 5
         subscriptions_data = {
@@ -2500,6 +2521,7 @@ def batch_add_all_servers():
     data = request.json or {}
     notify_available = data.get("notifyAvailable", True)
     notify_unavailable = data.get("notifyUnavailable", False)
+    auto_order = data.get("autoOrder", False)  # ✅ 获取自动下单参数
     
     added_count = 0
     skipped_count = 0
@@ -2528,7 +2550,8 @@ def batch_add_all_servers():
                 datacenters=[],  # 空列表表示监控所有机房
                 notify_available=notify_available,
                 notify_unavailable=notify_unavailable,
-                server_name=server_name
+                server_name=server_name,
+                auto_order=auto_order  # ✅ 传递自动下单参数
             )
             added_count += 1
             add_log("DEBUG", f"批量添加订阅: {plan_code} ({server_name or '未知名称'})", "monitor")
