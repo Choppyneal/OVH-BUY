@@ -3046,11 +3046,17 @@ def process_telegram_order(plan_code, datacenter=None, quantity=1, options=None)
         orders_to_create = []
         for config_key, config_data in configs_to_order:
             config_options = config_data.get("options", [])
+            # 确保 options 是列表的副本，避免引用共享问题
+            config_options = list(config_options) if config_options else []
             dc_map = config_data.get("datacenters", {})
             memory = config_data.get("memory", "N/A")
             storage = config_data.get("storage", "N/A")
             
-            add_log("INFO", f"[Telegram下单] 处理配置: memory={memory}, storage={storage}, options={config_options}, 数据中心数={len([dc for dc in datacenters_to_order if dc_map.get(dc) not in ['unavailable', 'unknown']])}", "telegram")
+            add_log("INFO", f"[Telegram下单] 处理配置: memory={memory}, storage={storage}, options={config_options} (数量: {len(config_options)}), 数据中心数={len([dc for dc in datacenters_to_order if dc_map.get(dc) not in ['unavailable', 'unknown']])}", "telegram")
+            
+            # 如果配置选项为空，记录警告
+            if not config_options:
+                add_log("WARNING", f"[Telegram下单] ⚠️ 配置选项为空！memory={memory}, storage={storage}, config_key={config_key}", "telegram")
             
             for dc in datacenters_to_order:
                 # 检查该配置在该机房是否有货
@@ -3059,11 +3065,12 @@ def process_telegram_order(plan_code, datacenter=None, quantity=1, options=None)
                 
                 # 为每个数据中心创建 quantity 个订单
                 for i in range(quantity):
+                    # 为每个订单项创建独立的 options 列表副本
                     queue_item = {
                         "id": str(uuid.uuid4()),
                         "planCode": plan_code,
                         "datacenter": dc,
-                        "options": config_options,  # 这里会带上硬件选项
+                        "options": list(config_options),  # 创建列表副本，确保每个订单项都有独立的 options
                         "status": "running",
                         "createdAt": datetime.now().isoformat(),
                         "updatedAt": datetime.now().isoformat(),
@@ -3073,7 +3080,7 @@ def process_telegram_order(plan_code, datacenter=None, quantity=1, options=None)
                         "fromTelegram": True  # 标记来自Telegram
                     }
                     orders_to_create.append(queue_item)
-                    add_log("DEBUG", f"[Telegram下单] 创建订单项: planCode={plan_code}, datacenter={dc}, options={config_options}", "telegram")
+                    add_log("DEBUG", f"[Telegram下单] 创建订单项: planCode={plan_code}, datacenter={dc}, options={queue_item['options']} (ID: {queue_item['id'][:8]})", "telegram")
         
         # 并发处理订单创建（每批10单）
         BATCH_SIZE = 10
